@@ -201,8 +201,7 @@ class NMRPulseFullFit(NMRPulseFiltered):
             fit_harmonics -- If True, the fitting routine will include the first seven mixer
                              harmonics in the fit.
 
-            env_deg -- If True, the fitting routine will include the first seven mixer
-                             harmonics in the fit.
+            env_deg -- Determines which envelope to use in the fit. (1,2 or 3)
 
             amplitude_guess -- An initial guess of the t=0 signal amplitude which helps the
                                fit converge faster.
