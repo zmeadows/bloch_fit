@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/Users/zac/Research/muon_g2_2015/nmr/bloch_fit')
+
 import matplotlib.pyplot as plt
 from pulse import NMRPulse
 import util as u

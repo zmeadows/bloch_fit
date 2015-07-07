@@ -5,17 +5,18 @@ import matplotlib.pyplot as plt
 from pulse import NMRPulsePhaseFit
 import util as u
 import math
+import numpy as np
 
 p = NMRPulsePhaseFit(u.get_pulse_path(),
-                     zc_use_filter = True,
+                     phase_fit_use_filter = True,
                      init_signal_cut = 4.0e-4,
-                     zc_stop = 20e-3,
+                     phase_fit_stop = 20e-3,
                      debug=True,
                      w_ref = 2*math.pi*9685)
 
 plt.figure(facecolor=u.LIGHTGREY)
-plt.plot(p.phase_times, (p.phase_data - p.w_ref*p.phase_times) - p.phase_fit.best_values['d'], linestyle="None", marker=".", markeredgecolor = "#4f4f4f")
-plt.plot(p.phase_times, (p.phase_fit.best_fit - p.w_ref*p.phase_times) - p.phase_fit.best_values['d'], color=u.RED)
+plt.plot(p.zcs, np.zeros(p.zcs.size), linestyle="None", marker=".", markeredgecolor = "#ff0000", markerfacecolor="#ff0000", markersize=20)
+plt.plot(p.raw_times, p.raw_signal, color="#4f4f4f")
 plt.grid()
 plt.gca().set_axis_bgcolor(u.GREY)
 plt.title("PHASE VS. TIME FIT")
