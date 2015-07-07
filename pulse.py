@@ -396,8 +396,6 @@ class NMRPulsePhaseFit(NMRPulseZCAnalysis):
     def __init__(self, filepath, **kwargs):
         ''' PARAMS:
             filepath -- path to pulse data file.
-
-            phase_fit_stop -- The duration of the signal to apply the phase fit to.
         '''
         super(NMRPulsePhaseFit, self).__init__(filepath, **kwargs)
 
