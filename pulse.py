@@ -3,9 +3,10 @@ import numpy as np
 import lmfit
 from scipy import interpolate
 from scipy.optimize import minimize
+from scipy.signal import hilbert
 import time
 
-VERSION = "0.4.2"
+VERSION = "0.4.4"
 VERSION_STRING = "[BLOCH FIT v" + VERSION + "]"
 
 class NMRPulse(object):
@@ -49,6 +50,7 @@ class NMRPulse(object):
         if (filepath[-4:] == ".bin"):
             signal_data = np.fromfile(filepath, dtype=np.dtype('u2'))
             time_indices = np.arange(signal_data.size)
+
         elif (filepath[-4:] == ".dat"):
             time_indices, signal_data = np.loadtxt(filepath, delimiter=' ',
                                                    usecols=(0, 1), unpack=True)
@@ -278,15 +280,8 @@ class NMRPulseFullFit(NMRPulseFiltered):
             cut_signal = self.raw_signal[:ei]
             cut_times = self.raw_times[:ei]
 
-        def print_iter(params, iter, resid, *args, **kws):
-            if not self.debug:
-                return
-            if iter % 20 == 0 or iter == 1:
-                print "FULL FIT ITERATION: " + str(iter)
-                print "FULL FIT RMS: " + str(rms(resid))
-
         if self.debug: print "FITTING FULL PULSE..."
-        self.fit_data = pulse_model.fit(cut_signal, t=cut_times, iter_cb=print_iter)
+        self.fit_data = pulse_model.fit(cut_signal, t=cut_times)
         if self.debug: print "FINISHED.\n"
 
         self.best_fit = self.fit_data.best_fit
@@ -437,7 +432,53 @@ class NMRPulsePhaseFit(NMRPulseZCAnalysis):
                 a = self.phase_fit.best_values['a']
                 b = self.phase_fit.best_values['b']
                 c = self.phase_fit.best_values['c']
-                return self.w_ref*(1 + a) + 2*b*t2 + 3*c*t**2
+                return self.w_ref*(1 + a + 2*b*t2 + 3*c*t2**2)
+
+        self.phase_freq_vs_time = np.vectorize(phase_freq_func)(self.phase_times)
+
+class NMRHilbertFit(NMRPulseFiltered):
+    ''' Use a Hilbert transform to calculate frequency vs. time. '''
+    def __init__(self, filepath, hilbert_use_filter = False, hilbert_stop = 10e-3, hilbert_cut = 25e-4, **kwargs):
+        ''' PARAMS:
+            filepath -- path to pulse data file.
+        '''
+        super(NMRHilbertFit, self).__init__(filepath, **kwargs)
+
+        stop_index = hilbert_stop / self.sampling_period
+        self.hilbert_times = self.raw_times[:stop_index]
+
+        if hilbert_use_filter:
+            cut_signal = self.filter_signal[:stop_index]
+        else:
+            cut_signal = self.raw_signal[:stop_index]
+
+        self.hilbert_transform = hilbert(cut_signal)
+        cut_index = hilbert_cut / self.sampling_period
+        self.hilbert_times = self.hilbert_times[cut_index:]
+        self.hilbert_amp = np.abs(self.hilbert_transform)[cut_index: -cut_index]
+
+        self.hilbert_phase = np.angle(self.hilbert_transform)
+
+        self.hilbert_phase = self.hilbert_phase[cut_index:self.hilbert_phase.size - cut_index]
+        self.hilbert_times = self.hilbert_times[:self.hilbert_times.size - cut_index]
+
+        self.hilbert_phase = np.unwrap(self.hilbert_phase)
+
+        def phase_func(t, a = 0.0, b = 0.0, c = 0.0, d=0.0):
+            t2 = t/self.signal_duration
+            return self.w_ref*(1 + a + b*t2 + c*t2**2)*t + d
+
+        phase_model = lmfit.Model(phase_func)
+        self.hilbert_fit = phase_model.fit(self.hilbert_phase, t=self.hilbert_times,
+                                           weights = self.hilbert_amp)
+        self.hilbert_freq = self.w_ref*(1 + self.hilbert_fit.best_values['a'])/(2*math.pi)
+        self.debug_print(self.hilbert_freq)
+
+        self.hilbert_fit_nonlinear = phase_func(self.hilbert_times, a = 0,
+                                                  b = self.hilbert_fit.best_values['b'],
+                                                  c = self.hilbert_fit.best_values['c'], d = self.hilbert_fit.best_values['d']) - self.w_ref*self.hilbert_times
+        self.hilbert_phase_nonlinear = self.hilbert_phase - self.w_ref*self.hilbert_times
+
 
 def rms(arr):
     assert(arr.size > 1)
